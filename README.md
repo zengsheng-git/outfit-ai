@@ -1,3 +1,5 @@
+https://github.com/Alaye-Dong/outfit-ai-studio
+
 # AI 穿搭预演工具 Demo
 
 一个简易的 AI 穿搭搭配工具 Demo，支持从单品库选择服装、拖拽搭配、AI 生成穿搭效果图。

@@ -1,12 +1,71 @@
 <script setup lang="ts">
 import { useOutfitStore } from '@/stores/outfit'
-import { computed, ref } from 'vue'
-import { generateOutfitImage } from '@/api/generation'
+import { computed, onMounted, ref, watch } from 'vue'
+import { generateOutfitImage, getGenerationStatus } from '@/api/generation'
+import type { GenerationQuota } from '@/api/generation'
 import type { OutfitSelection, ClothingItem } from '@/types/outfit'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
 
 const store = useOutfitStore()
+
+// 出图渠道与配额胶囊：页面加载 / 生成结束后自动刷新，点击胶囊立即刷新
+interface ChannelInfo {
+  label: string
+  model?: string
+  keyHint?: string
+  quota?: GenerationQuota
+}
+
+const channel = ref<ChannelInfo | null>(null)
+const refreshing = ref(false)
+
+async function refreshChannel() {
+  if (refreshing.value) return
+  refreshing.value = true
+  try {
+    const status = await getGenerationStatus()
+    const active = status.providers.find(p => p.key === status.active)
+    channel.value = active
+      ? {
+          label: active.name ?? '未知',
+          model: 'model' in active ? active.model : undefined,
+          keyHint: 'keyHint' in active ? active.keyHint : undefined,
+          quota: 'quota' in active ? active.quota : undefined,
+        }
+      : null
+  } catch (e) {
+    console.error('Failed to load generation status:', e)
+  } finally {
+    refreshing.value = false
+  }
+}
+
+onMounted(refreshChannel)
+watch(
+  () => store.generateStatus,
+  status => {
+    if (status === 'success' || status === 'failed') refreshChannel()
+  },
+)
+
+const quotaView = computed(() => {
+  const quota = channel.value?.quota
+  if (!quota || quota.weeklyPercent == null) return null
+  return {
+    percent: quota.weeklyPercent,
+    barWidth: `${Math.max(0, Math.min(100, quota.weeklyPercent))}%`,
+    reset: formatTime(quota.weeklyResetAt),
+  }
+})
+
+const fetchedText = computed(() => formatTime(channel.value?.quota?.fetchedAt))
+
+function formatTime(iso?: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
 
 // 出图方式：AI 模特图（会参考单品图生成，可能有偏差）/ 实拍平铺（直接用原图，零偏差）
 const generateMode = ref<'ai' | 'lookbook'>('ai')
@@ -140,12 +199,173 @@ async function handleGenerate() {
     >
       生成效果图
     </n-button>
+    <n-tooltip v-if="channel" trigger="hover" placement="bottom-right" :show-arrow="false">
+      <template #trigger>
+        <div class="quota-pill" @click="refreshChannel">
+          <span class="quota-dot" :class="{ refreshing }"></span>
+          <span class="quota-name">{{ channel.label }}</span>
+          <template v-if="quotaView">
+            <span class="quota-bar">
+              <span class="quota-bar-fill" :style="{ width: quotaView.barWidth }"></span>
+            </span>
+            <span class="quota-num">{{ quotaView.percent }}%</span>
+            <span class="quota-reset" v-if="quotaView.reset">{{ quotaView.reset }} 重置</span>
+          </template>
+        </div>
+      </template>
+      <div class="quota-detail">
+        <div class="quota-detail-title">出图渠道</div>
+        <div class="quota-detail-row">
+          <span>{{ channel.label }}</span>
+          <span class="quota-detail-muted" v-if="channel.model">{{ channel.model }}</span>
+        </div>
+        <div class="quota-detail-row" v-if="channel.keyHint">
+          <span class="quota-detail-muted">密钥</span>
+          <span>{{ channel.keyHint }}</span>
+        </div>
+        <template v-if="quotaView">
+          <div class="quota-detail-title">周额度余量</div>
+          <div class="quota-detail-row">
+            <span>{{ quotaView.percent }}%</span>
+            <span class="quota-detail-muted" v-if="quotaView.reset">{{ quotaView.reset }} 重置</span>
+          </div>
+        </template>
+        <template v-if="channel.quota">
+          <div class="quota-detail-title">5h 窗口</div>
+          <div class="quota-detail-row">
+            <span v-if="channel.quota.intervalHasQuota && channel.quota.intervalPercent != null">
+              {{ channel.quota.intervalPercent }}%
+            </span>
+            <span class="quota-detail-muted" v-else>当前套餐未分配</span>
+          </div>
+        </template>
+        <div class="quota-detail-row" v-if="fetchedText">
+          <span class="quota-detail-muted">查询时间</span>
+          <span>{{ fetchedText }}</span>
+        </div>
+        <div class="quota-detail-row">
+          <span class="quota-detail-muted">刷新方式</span>
+          <span>点击胶囊立即刷新</span>
+        </div>
+      </div>
+    </n-tooltip>
   </div>
 </template>
 
 <style lang="scss" scoped>
 .top-actions {
   display: flex;
+  align-items: center;
   gap: var(--gap-sm);
+}
+
+.quota-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  background: linear-gradient(135deg, #f8fafc, #eef2f7);
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #475569;
+  white-space: nowrap;
+  flex-shrink: 0;
+  user-select: none;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+
+  &:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  }
+
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+.quota-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.45);
+
+  &.refreshing {
+    animation: quota-pulse 0.8s ease-in-out infinite;
+  }
+}
+
+@keyframes quota-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.7);
+  }
+}
+
+.quota-name {
+  font-weight: 600;
+  color: #1e293b;
+  letter-spacing: 0.02em;
+}
+
+.quota-bar {
+  width: 48px;
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.quota-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #34d399, #10b981);
+  transition: width 0.4s ease;
+}
+
+.quota-num {
+  font-weight: 700;
+  color: #059669;
+  font-variant-numeric: tabular-nums;
+}
+
+.quota-reset {
+  color: #94a3b8;
+}
+
+.quota-detail {
+  min-width: 200px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.quota-detail-title {
+  margin: 8px 0 2px;
+  font-weight: 600;
+  opacity: 0.9;
+
+  &:first-child {
+    margin-top: 0;
+  }
+}
+
+.quota-detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.quota-detail-muted {
+  opacity: 0.65;
 }
 </style>

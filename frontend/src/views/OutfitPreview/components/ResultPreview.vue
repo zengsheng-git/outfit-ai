@@ -1,28 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed } from 'vue'
 import { useOutfitStore } from '@/stores/outfit'
-import { getGenerationStatus } from '@/api/generation'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
 
 const store = useOutfitStore()
-
-// 当前出图渠道，便于确认密钥是否配置成功
-const channel = ref<{ active: string; label: string; keyHint?: string } | null>(null)
-
-onMounted(async () => {
-  try {
-    const status = await getGenerationStatus()
-    const active = status.providers.find(p => p.key === status.active)
-    channel.value = {
-      active: status.active,
-      label: active?.name ?? '未知',
-      keyHint: active && 'keyHint' in active ? active.keyHint : undefined,
-    }
-  } catch (e) {
-    console.error('Failed to load generation status:', e)
-  }
-})
 
 // 后端返回的可能是相对路径（如 /generated/outfit-xxx.png），需要补上后端地址
 const resultImageSrc = computed(() => {
@@ -46,9 +28,6 @@ const statusText = computed(() => {
   <div class="result-preview">
     <div class="result-header">
       <h3>成果展示</h3>
-      <n-tag v-if="channel" size="small" :bordered="false" type="info">
-        出图渠道：{{ channel.label }}<template v-if="channel.keyHint"> · {{ channel.keyHint }}</template>
-      </n-tag>
     </div>
     <div class="result-content">
       <!-- idle 状态 -->

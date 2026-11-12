@@ -11,6 +11,20 @@ interface GenerateImageOutput {
   imageUrl: string
 }
 
+/** token plan 配额余量（周窗口 + 5h 窗口） */
+export interface MiniMaxQuota {
+  /** 周窗口剩余百分比 */
+  weeklyPercent?: number
+  /** 周窗口重置时间（ISO） */
+  weeklyResetAt?: string
+  /** 5h 窗口剩余百分比 */
+  intervalPercent?: number
+  /** 套餐是否分配了 5h 窗口额度 */
+  intervalHasQuota: boolean
+  /** 数据查询时间（ISO） */
+  fetchedAt: string
+}
+
 /**
  * MiniMax 图像生成（H3-Image 系列）
  *
@@ -46,6 +60,55 @@ export class MiniMaxProvider {
   getKeyFingerprint(): string {
     if (!this.apiKey) return ''
     return `${this.apiKey.slice(0, 8)}…${this.apiKey.slice(-4)}`
+  }
+
+  /**
+   * 查询配额余量（token plan，图片生成归在 general 桶），返回结构化数据。
+   * 注意：状态 2 表示该窗口在套餐中未分配额度（而非"用完"）；
+   * 实测图像生成不消耗此配额，按量计费走账户余额。
+   * 纯展示用途：任何失败都静默返回 undefined，不影响出图主链路。
+   */
+  async getQuota(): Promise<MiniMaxQuota | undefined> {
+    if (!this.apiKey) return undefined
+    try {
+      const response = await fetch(`${this.baseUrl}/v1/token_plan/remains`, {
+        headers: { Authorization: `Bearer ${this.apiKey}` },
+        signal: AbortSignal.timeout(8000),
+      })
+      const data = await response.json()
+      if (data?.base_resp?.status_code !== 0) return undefined
+
+      const remains: Array<{
+        model_name?: string
+        current_interval_total_count?: number
+        current_interval_status?: number
+        current_interval_remaining_percent?: number
+        current_weekly_remaining_percent?: number
+        weekly_end_time?: number
+      }> = data?.model_remains ?? []
+
+      const general = remains.find(r => r.model_name === 'general') ?? remains[0]
+      if (!general) return undefined
+
+      return {
+        weeklyPercent:
+          typeof general.current_weekly_remaining_percent === 'number'
+            ? general.current_weekly_remaining_percent
+            : undefined,
+        weeklyResetAt: general.weekly_end_time
+          ? new Date(general.weekly_end_time).toISOString()
+          : undefined,
+        intervalPercent:
+          typeof general.current_interval_remaining_percent === 'number'
+            ? general.current_interval_remaining_percent
+            : undefined,
+        intervalHasQuota:
+          (general.current_interval_total_count ?? 0) > 0 || general.current_interval_status === 1,
+        fetchedAt: new Date().toISOString(),
+      }
+    } catch {
+      return undefined
+    }
   }
 
   async generate(input: GenerateImageInput): Promise<GenerateImageOutput> {

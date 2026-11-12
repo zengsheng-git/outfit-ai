@@ -19,12 +19,25 @@ export function generateOutfitImage(data: {
   return post<GenerateResult>('/api/generation/outfit', data)
 }
 
+/** MiniMax token plan 配额余量 */
+export interface GenerationQuota {
+  weeklyPercent?: number
+  /** 周窗口重置时间（ISO） */
+  weeklyResetAt?: string
+  intervalPercent?: number
+  /** 套餐是否分配了 5h 窗口额度 */
+  intervalHasQuota?: boolean
+  /** 数据查询时间（ISO） */
+  fetchedAt?: string
+}
+
 export interface GenerationProvider {
   key: string
   name: string
   enabled: boolean
   model?: string
   keyHint?: string
+  quota?: GenerationQuota
 }
 
 export interface GenerationStatus {

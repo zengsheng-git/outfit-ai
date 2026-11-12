@@ -219,9 +219,11 @@ export class GenerationService {
    * 当前可用的出图渠道。
    * 密钥只在启动时读取一次，所以改完 .env 必须重启后端才会生效。
    */
-  getStatus() {
+  async getStatus() {
     const bailian = this.bailianProvider.isEnabled()
     const minimax = this.miniMaxProvider.isEnabled()
+    // 查询 MiniMax 配额余量，查询失败不影响渠道状态展示
+    const quota = minimax ? await this.miniMaxProvider.getQuota() : undefined
 
     return {
       code: 0,
@@ -236,6 +238,7 @@ export class GenerationService {
             enabled: minimax,
             model: minimax ? this.miniMaxProvider.getModel() : undefined,
             keyHint: minimax ? this.miniMaxProvider.getKeyFingerprint() : undefined,
+            quota,
           },
           { key: 'local', name: '本地示意图', enabled: true },
         ],
