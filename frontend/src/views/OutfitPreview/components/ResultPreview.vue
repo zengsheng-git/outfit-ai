@@ -1,8 +1,35 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useOutfitStore } from '@/stores/outfit'
+import { getGenerationStatus } from '@/api/generation'
+
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
 
 const store = useOutfitStore()
+
+// 当前出图渠道，便于确认密钥是否配置成功
+const channel = ref<{ active: string; label: string; keyHint?: string } | null>(null)
+
+onMounted(async () => {
+  try {
+    const status = await getGenerationStatus()
+    const active = status.providers.find(p => p.key === status.active)
+    channel.value = {
+      active: status.active,
+      label: active?.name ?? '未知',
+      keyHint: active && 'keyHint' in active ? active.keyHint : undefined,
+    }
+  } catch (e) {
+    console.error('Failed to load generation status:', e)
+  }
+})
+
+// 后端返回的可能是相对路径（如 /generated/outfit-xxx.png），需要补上后端地址
+const resultImageSrc = computed(() => {
+  const url = store.resultImageUrl
+  if (!url) return ''
+  return url.startsWith('http') ? url : `${BASE_URL}${url}`
+})
 
 const statusText = computed(() => {
   switch (store.generateStatus) {
@@ -19,6 +46,9 @@ const statusText = computed(() => {
   <div class="result-preview">
     <div class="result-header">
       <h3>成果展示</h3>
+      <n-tag v-if="channel" size="small" :bordered="false" type="info">
+        出图渠道：{{ channel.label }}<template v-if="channel.keyHint"> · {{ channel.keyHint }}</template>
+      </n-tag>
     </div>
     <div class="result-content">
       <!-- idle 状态 -->
@@ -26,18 +56,18 @@ const statusText = computed(() => {
         <div class="idle-icon">👗</div>
         <p>请先选择单品并点击"生成效果图"</p>
       </div>
-      
+
       <!-- generating 状态 -->
       <div v-else-if="store.generateStatus === 'generating'" class="result-generating">
         <n-spin size="large" />
         <p>{{ statusText }}</p>
       </div>
-      
+
       <!-- success 状态 -->
       <div v-else-if="store.generateStatus === 'success'" class="result-success">
-        <img :src="store.resultImageUrl" alt="穿搭效果图" />
+        <img :src="resultImageSrc" alt="穿搭效果图" />
         <div v-if="store.isFallback" class="fallback-notice">
-          当前展示的是预生成 Demo 效果图
+          {{ store.generateReason || '当前展示的是本地示意图' }}
         </div>
       </div>
       
@@ -60,6 +90,10 @@ const statusText = computed(() => {
 .result-header {
   padding: var(--gap-md);
   border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-sm);
   h3 {
     margin: 0;
     font-size: 16px;

@@ -1,2 +1,7 @@
 .omo
 node_modules/
+ai-nvzhuang-prompt-cookbook-main
+.history
+.env
+*.log
+dist/

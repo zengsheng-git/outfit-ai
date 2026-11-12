@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
 import type { ClothingItem, ClothingCategory, OutfitSelection, GenerateStatus } from '@/types/outfit'
+import { isMultiItemCategory } from '@/types/outfit'
 
 export const useOutfitStore = defineStore('outfit', () => {
   const selectedItems = reactive<OutfitSelection>({})
@@ -9,15 +10,14 @@ export const useOutfitStore = defineStore('outfit', () => {
   const generateError = ref('')
   const currentPrompt = ref('')
   const isFallback = ref(false)
+  const generateReason = ref('')
 
   function addItem(item: ClothingItem) {
-    if (item.category === 'accessory') {
-      if (!selectedItems.accessory) {
-        selectedItems.accessory = []
-      }
-      const exists = selectedItems.accessory.some(i => i.id === item.id)
-      if (!exists) {
-        selectedItems.accessory.push(item)
+    if (isMultiItemCategory(item.category)) {
+      const list = ((selectedItems as Record<string, unknown>)[item.category] ??=
+        []) as ClothingItem[]
+      if (!list.some(i => i.id === item.id)) {
+        list.push(item)
       }
       return
     }
@@ -25,10 +25,15 @@ export const useOutfitStore = defineStore('outfit', () => {
   }
 
   function removeItem(category: ClothingCategory, itemId?: string) {
-    if (category === 'accessory' && itemId && selectedItems.accessory) {
-      selectedItems.accessory = selectedItems.accessory.filter(i => i.id !== itemId)
-      if (selectedItems.accessory.length === 0) {
-        delete selectedItems.accessory
+    if (isMultiItemCategory(category) && itemId) {
+      const list = (selectedItems as Record<string, ClothingItem[] | undefined>)[category]
+      if (list) {
+        const next = list.filter(i => i.id !== itemId)
+        if (next.length === 0) {
+          delete (selectedItems as Record<string, unknown>)[category]
+        } else {
+          ;(selectedItems as Record<string, unknown>)[category] = next
+        }
       }
       return
     }
@@ -44,18 +49,21 @@ export const useOutfitStore = defineStore('outfit', () => {
     generateError.value = ''
     currentPrompt.value = ''
     isFallback.value = false
+    generateReason.value = ''
   }
 
   function setGenerating() {
     generateStatus.value = 'generating'
     generateError.value = ''
     isFallback.value = false
+    generateReason.value = ''
   }
 
-  function setGenerateSuccess(url: string, fallback = false) {
+  function setGenerateSuccess(url: string, fallback = false, reason = '') {
     resultImageUrl.value = url
     generateStatus.value = 'success'
     isFallback.value = fallback
+    generateReason.value = reason
   }
 
   function setGenerateFailed(error: string) {
@@ -77,6 +85,7 @@ export const useOutfitStore = defineStore('outfit', () => {
     generateError,
     currentPrompt,
     isFallback,
+    generateReason,
     addItem,
     removeItem,
     clearOutfit,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useMessage } from 'naive-ui'
 import { useOutfitStore } from '@/stores/outfit'
 import type { SlotDefinition, ClothingItem } from '@/types/outfit'
@@ -10,6 +10,9 @@ const props = defineProps<{ slotDef: SlotDefinition }>()
 const store = useOutfitStore()
 const message = useMessage()
 
+// 记录加载失败的单品，退回占位图
+const failedIds = ref<Set<string>>(new Set())
+
 const slotItems = computed(() => {
   const val = store.selectedItems[props.slotDef.key]
   if (!val) return []
@@ -19,13 +22,18 @@ const slotItems = computed(() => {
 
 function getImageUrl(item: ClothingItem): string {
   if (!item.imageUrl) return ''
-  return item.imageUrl.startsWith('http') 
-    ? item.imageUrl 
+  return item.imageUrl.startsWith('http')
+    ? item.imageUrl
     : `${BASE_URL}${item.imageUrl}`
 }
 
 function hasImage(item: ClothingItem): boolean {
+  if (failedIds.value.has(item.id)) return false
   return !!item.imageUrl && !item.imageUrl.includes('placeholder')
+}
+
+function markFailed(itemId: string) {
+  failedIds.value = new Set(failedIds.value).add(itemId)
 }
 
 function handleRemove(itemId?: string) {
@@ -75,7 +83,13 @@ function onDrop(event: DragEvent) {
         class="slot-item"
       >
         <div class="item-image">
-          <img v-if="hasImage(item)" :src="getImageUrl(item)" :alt="item.name" class="image-real" />
+          <img
+            v-if="hasImage(item)"
+            :src="getImageUrl(item)"
+            :alt="item.name"
+            class="image-real"
+            @error="markFailed(item.id)"
+          />
           <div v-else class="image-placeholder">{{ item.name.charAt(0) }}</div>
           <button class="remove-btn" @click="handleRemove(item.id)">×</button>
         </div>

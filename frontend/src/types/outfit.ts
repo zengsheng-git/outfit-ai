@@ -7,6 +7,9 @@ export type ClothingCategory =
   | 'shoes'
   | 'bag'
   | 'accessory'
+  | 'hosiery'
+  | 'hairstyle'
+  | 'hat'
 
 // 分类中文映射
 export const categoryLabelMap: Record<ClothingCategory, string> = {
@@ -17,6 +20,16 @@ export const categoryLabelMap: Record<ClothingCategory, string> = {
   shoes: '鞋',
   bag: '包',
   accessory: '配饰',
+  hosiery: '袜类',
+  hairstyle: '发型',
+  hat: '帽子',
+}
+
+// 可以同时放多件单品的分类
+export const MULTI_ITEM_CATEGORIES: ClothingCategory[] = ['accessory', 'hosiery']
+
+export function isMultiItemCategory(category: ClothingCategory): boolean {
+  return MULTI_ITEM_CATEGORIES.includes(category)
 }
 
 // 单品数据
@@ -33,6 +46,8 @@ export interface ClothingItem {
 
 // 搭配选择（槽位映射）
 export interface OutfitSelection {
+  hairstyle?: ClothingItem
+  hat?: ClothingItem
   outerwear?: ClothingItem
   top?: ClothingItem
   bottom?: ClothingItem
@@ -40,6 +55,7 @@ export interface OutfitSelection {
   shoes?: ClothingItem
   bag?: ClothingItem
   accessory?: ClothingItem[]
+  hosiery?: ClothingItem[]
 }
 
 // 生成状态
@@ -61,10 +77,13 @@ export interface SlotDefinition {
 }
 
 export const outfitSlots: SlotDefinition[] = [
+  { key: 'hairstyle', label: '发型', acceptCategory: 'hairstyle', maxCount: 1 },
+  { key: 'hat', label: '帽子', acceptCategory: 'hat', maxCount: 1 },
   { key: 'outerwear', label: '外套', acceptCategory: 'outerwear', maxCount: 1 },
   { key: 'top', label: '上衣', acceptCategory: 'top', maxCount: 1 },
   { key: 'bottom', label: '下装', acceptCategory: 'bottom', maxCount: 1 },
   { key: 'dress', label: '连衣裙', acceptCategory: 'dress', maxCount: 1 },
+  { key: 'hosiery', label: '袜类', acceptCategory: 'hosiery', maxCount: Infinity },
   { key: 'shoes', label: '鞋', acceptCategory: 'shoes', maxCount: 1 },
   { key: 'bag', label: '包', acceptCategory: 'bag', maxCount: 1 },
   { key: 'accessory', label: '配饰', acceptCategory: 'accessory', maxCount: Infinity },

@@ -1,6 +1,7 @@
 # compiled output
 /dist
 /node_modules
+.history
 
 # Logs
 logs
@@ -51,7 +52,7 @@ pids
 *.pid.lock
 
 # Uploads and generated files (keep directory structure)
-!public/uploads/.gitkeep
-!public/generated/.gitkeep
 public/uploads/*
 public/generated/*
+!public/uploads/.gitkeep
+!public/generated/.gitkeep

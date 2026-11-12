@@ -27,19 +27,23 @@ export class BailianProvider {
     return 'https://dashscope.aliyuncs.com/api/v1'
   }
 
+  /** 是否具备调用百炼出图的条件；不满足时由本地渲染接管 */
+  isEnabled(): boolean {
+    return !this.useMock && !!this.apiKey
+  }
+
   async generate(input: GenerateImageInput): Promise<GenerateImageOutput> {
-    console.log('[BailianProvider] Config check:', { 
-      useMock: this.useMock, 
-      hasApiKey: !!this.apiKey, 
+    console.log('[BailianProvider] Config check:', {
+      useMock: this.useMock,
+      hasApiKey: !!this.apiKey,
       apiKeyLength: this.apiKey.length,
       apiKeyPrefix: this.apiKey.substring(0, 10) + '...',
       model: this.model,
-      baseUrl: this.baseUrl
+      baseUrl: this.baseUrl,
     })
-    
-    if (this.useMock || !this.apiKey) {
-      console.log('[BailianProvider] Using mock/fallback mode')
-      return this.getFallbackImage()
+
+    if (!this.isEnabled()) {
+      throw new Error('未配置 BAILIAN_API_KEY（或已开启 Mock 模式），无法调用百炼出图')
     }
 
     try {
@@ -49,15 +53,10 @@ export class BailianProvider {
       return result
     } catch (syncError) {
       console.warn('[BailianProvider] Sync call failed:', syncError)
-      try {
-        console.log('[BailianProvider] Attempting async call...')
-        const result = await this.generateAsync(input)
-        console.log('[BailianProvider] Async call succeeded:', result.imageUrl)
-        return result
-      } catch (asyncError) {
-        console.error('[BailianProvider] Both sync and async failed:', asyncError)
-        return this.getFallbackImage()
-      }
+      console.log('[BailianProvider] Attempting async call...')
+      const result = await this.generateAsync(input)
+      console.log('[BailianProvider] Async call succeeded:', result.imageUrl)
+      return result
     }
   }
 
@@ -199,17 +198,5 @@ export class BailianProvider {
     }
 
     throw new Error('Async polling timeout')
-  }
-
-  private getFallbackImage(): GenerateImageOutput {
-    const fallbackImages = [
-      '/generated/fallback-001.png',
-      '/generated/fallback-002.png',
-      '/generated/fallback-003.png',
-    ]
-    return {
-      imageUrl: fallbackImages[Math.floor(Math.random() * fallbackImages.length)],
-      isFallback: true,
-    }
   }
 }

@@ -6,6 +6,9 @@ export type ClothingCategory =
   | 'shoes'
   | 'bag'
   | 'accessory'
+  | 'hosiery'
+  | 'hairstyle'
+  | 'hat'
 
 export interface ClothingItem {
   id: string
@@ -19,6 +22,8 @@ export interface ClothingItem {
 }
 
 export interface OutfitSelection {
+  hairstyle?: ClothingItem
+  hat?: ClothingItem
   outerwear?: ClothingItem
   top?: ClothingItem
   bottom?: ClothingItem
@@ -26,6 +31,7 @@ export interface OutfitSelection {
   shoes?: ClothingItem
   bag?: ClothingItem
   accessory?: ClothingItem[]
+  hosiery?: ClothingItem[]
 }
 
 export interface OutfitRecord {
